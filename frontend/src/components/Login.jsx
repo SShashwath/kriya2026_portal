@@ -44,9 +44,9 @@ function Login({ onLoginSuccess }) {
 
                 // store team info for later pages
                 localStorage.setItem("team", JSON.stringify(data.team))
-                
+
                 // navigate to ship landing
-                navigate("/ShipLanding")
+                navigate("/codequest/shiplanding")
             }
 
         } catch (err) {
