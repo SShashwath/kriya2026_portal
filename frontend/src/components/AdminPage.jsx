@@ -61,11 +61,26 @@ const AdminPage = () => {
     const fetchAlgorithmCards = async () => {
         try {
             const token = localStorage.getItem("adminToken");
-            const res = await fetch(`${ADMIN_API}/algorithmcard`, {
+            // Try the admin endpoint first as it's the more reliable one for management
+            const url = `${ADMIN_API}/algorithmcard`;
+            console.log(`Admin: Fetching algos from ${url}`);
+            const res = await fetch(url, {
                 headers: { "Authorization": `Bearer ${token}` }
             });
             const data = await res.json();
-            if (res.ok) setAlgorithmCards(data);
+            
+            if (res.ok && Array.isArray(data)) {
+                console.log("Admin: Successfully loaded algos:", data.length);
+                setAlgorithmCards(data);
+            } else {
+                console.warn("Admin: Algos fetch failed or empty. Trying standalone endpoint...");
+                // Fallback to standalone endpoint
+                const res2 = await fetch(`${API_BASE}/api/algorithms/`);
+                const data2 = await res2.json();
+                if (res2.ok && Array.isArray(data2)) {
+                    setAlgorithmCards(data2);
+                }
+            }
         } catch (err) {
             console.error("Failed to fetch algo cards", err);
         }
@@ -133,14 +148,16 @@ const AdminPage = () => {
             const data = await res.json();
             if (res.ok) {
                 // Map backend Team schema to frontend state
-                const mappedTeams = data.map(team => ({
-                    id: team._id,
-                    name: team.teamName,
-                    points: team.totalScore || 0,
-                    algoCards: [],
-                    actionCards: [],
-                    currentQuestionNo: team.currentQuestionNo || 1
-                }));
+                const mappedTeams = data.map(team => {
+                    return {
+                        id: team._id,
+                        name: team.teamName || "Unnamed Team",
+                        points: team.totalScore || 0,
+                        algoCards: team.round1?.selectedScrolls?.map(s => s.name || s) || [],
+                        actionCards: team.round2?.actionCardsUsed?.map(c => c.cardId || c) || [],
+                        currentQuestionNo: team.currentQuestionNo || 1
+                    };
+                });
                 setTeams(mappedTeams);
                 setError(null);
             } else {
@@ -402,17 +419,59 @@ const AdminPage = () => {
     };
 
     const toggleAlgoSelection = (algoId) => {
-        const current = [...r2Form.allowedAlgorithms];
-        if (current.includes(algoId)) {
-            setR2Form({ ...r2Form, allowedAlgorithms: current.filter(id => id !== algoId) });
-        } else {
-            setR2Form({ ...r2Form, allowedAlgorithms: [...current, algoId] });
-        }
+        if (!algoId) return;
+        const idStr = String(algoId);
+        setR2Form(prev => {
+            const current = (prev.allowedAlgorithms || []).map(id => String(id));
+            const next = current.includes(idStr)
+                ? current.filter(id => id !== idStr)
+                : [...current, idStr];
+            return { ...prev, allowedAlgorithms: next };
+        });
     };
 
-    const toggleCard = (teamId, field, card, limit) => {
-        // Disabled for now as backend doesn't support
-        alert("Algo/Action cards integration is not ready in backend yet.");
+    const toggleCard = async (teamId, field, cardName, limit) => {
+        const team = teams.find(t => t.id === teamId);
+        if (!team) return;
+
+        let currentCards = [...(team[field] || [])];
+        if (currentCards.includes(cardName)) {
+            currentCards = currentCards.filter(c => c !== cardName);
+        } else {
+            if (currentCards.length >= limit) {
+                alert(`Limit reached: Maximum ${limit} cards allowed.`);
+                return;
+            }
+            currentCards.push(cardName);
+        }
+
+        try {
+            const token = localStorage.getItem("adminToken");
+            
+            // Format data based on what the backend expects
+            const payload = field === 'algoCards' 
+                ? { "round1.selectedScrolls": currentCards.map(name => ({ name })) }
+                : { "round2.actionCardsUsed": currentCards.map(id => ({ cardId: id })) };
+
+            const res = await fetch(`${ADMIN_API}/teams/${teamId}`, {
+                method: "PUT",
+                headers: { 
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}` 
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                fetchTeams(); // Refresh to show changes
+            } else {
+                const errorData = await res.json();
+                alert(`Update failed: ${errorData.msg || "Unknown error"}`);
+            }
+        } catch (err) {
+            console.error("Failed to update team cards", err);
+            alert("Connection error while updating cards");
+        }
     };
 
     const sortedLeaderboard = Array.isArray(teams) ? [...teams].sort((a, b) => b.points - a.points) : [];
@@ -593,9 +652,12 @@ const AdminPage = () => {
                                         <h3 className="q-title">{q.title}</h3>
                                         <p className="q-text">{q.description?.substring(0, 100)}...</p>
                                         <div className="q-card-footer">
-                                            <div className="q-stats">
+                                            <div className="q-stats" style={{flexWrap: 'wrap'}}>
                                                 <span>🧪 {q.testCases?.length} Tests</span>
-                                                <span>📜 {q.allowedAlgorithms?.length} Scrolls</span>
+                                                {q.allowedAlgorithms?.map(id => {
+                                                    const card = algorithmCards.find(c => String(c._id) === String(id));
+                                                    return card ? <span key={id} className="limit-count">📜 {card.name}</span> : null;
+                                                })}
                                             </div>
                                             <div className="q-actions">
                                                 <button className="edit-q-btn" onClick={() => handleEditR2Question(q)}>Edit</button>
@@ -610,7 +672,7 @@ const AdminPage = () => {
                 </div>
             </main>
 
-            {/* Editing Modal */}
+            {/* Question Modal */}
             {editingTeam && (
                 <div className="modal-overlay" onClick={closeEditor}>
                     <div className="neat-modal" onClick={e => e.stopPropagation()}>
@@ -678,12 +740,13 @@ const AdminPage = () => {
                                 </div>
                                 <div className="card-pill-grid">
                                     {actionCards.map(card => {
-                                        const active = editingTeam.actionCards.includes(card.name);
+                                        const cardId = String(card._id);
+                                        const active = editingTeam.actionCards.some(id => String(id) === cardId);
                                         return (
                                             <button
-                                                key={card._id}
+                                                key={cardId}
                                                 className={`action-pill ${active ? 'active' : ''}`}
-                                                onClick={() => toggleCard(editingTeam.id, 'actionCards', card.name, 4)}
+                                                onClick={() => toggleCard(editingTeam.id, 'actionCards', cardId, 4)}
                                             >
                                                 {card.name} {active ? '✓' : '+'}
                                             </button>
@@ -848,16 +911,21 @@ const AdminPage = () => {
                                 <div className="modal-section">
                                     <h3>Allowed Algorithms (Scrolls)</h3>
                                     <div className="card-pill-grid">
-                                        {algorithmCards.map(algo => (
-                                            <button
-                                                key={algo._id}
-                                                type="button"
-                                                className={`action-pill algo ${r2Form.allowedAlgorithms.includes(algo._id) ? 'active' : ''}`}
-                                                onClick={() => toggleAlgoSelection(algo._id)}
-                                            >
-                                                {algo.name}
-                                            </button>
-                                        ))}
+                                        {algorithmCards.length === 0 && <p style={{color: '#f85149', fontSize: '0.8rem'}}>No algorithm cards found in database. Please ensure they exist in the 'algorithms' collection.</p>}
+                                        {algorithmCards.map(algo => {
+                                            const algoId = String(algo._id);
+                                            const isSelected = r2Form.allowedAlgorithms.some(id => String(id) === algoId);
+                                            return (
+                                                <button
+                                                    key={algoId}
+                                                    type="button"
+                                                    className={`action-pill algo ${isSelected ? 'active' : ''}`}
+                                                    onClick={() => toggleAlgoSelection(algoId)}
+                                                >
+                                                    {algo.name}
+                                                </button>
+                                            );
+                                        })}
                                     </div>
                                 </div>
 

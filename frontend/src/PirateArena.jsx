@@ -6,6 +6,7 @@ import {
   useImperativeHandle,
   forwardRef,
 } from "react";
+import { useLocation } from "react-router-dom";
 import MonacoEditor from "@monaco-editor/react";
 import "./PirateArena.css";
 
@@ -605,8 +606,33 @@ const MAX_LIVES = 3;
 let LOG_ID = 0;
 
 export default function PirateArena({ problemId = 1, onBack }) {
+  const location = useLocation();
+  const stateProblem = location.state?.problem;
+
+  // Adapt DB problem to Arena format
+  const mappedProblem = stateProblem ? {
+      id: stateProblem._id,
+      slug: stateProblem.title.toLowerCase().replace(/\s+/g, '-'),
+      title: stateProblem.title,
+      lore: "A challenge from the deep...",
+      description: stateProblem.description,
+      examples: (stateProblem.testCases || [])
+          .filter(tc => !tc.isHidden)
+          .map(tc => ({
+              input: tc.input || "",
+              output: tc.output || "",
+              explanation: null
+          })),
+      constraints: [`Time Limit: ${stateProblem.timeLimitSec}s`],
+      testCases: (stateProblem.testCases || []).map(tc => ({
+          input: tc.input,
+          expected: tc.output
+      })),
+      bountyReward: 150
+  } : null;
+
   const initialProblem =
-    PROBLEMS.find((p) => p.id === problemId) || PROBLEMS[0];
+    mappedProblem || PROBLEMS.find((p) => p.id === problemId) || PROBLEMS[0];
   const [problem] = useState(initialProblem);
   const [language, setLanguage] = useState("python");
   const [code, setCode] = useState("");
@@ -636,7 +662,8 @@ export default function PirateArena({ problemId = 1, onBack }) {
   const handleBack = useCallback(() => {
     setIsClosing(true);
     setTimeout(() => {
-      onBack();
+      if (onBack) onBack();
+      else window.history.back(); // Fallback if no onBack is provided
     }, 250); // Matches the pa-arena-exit duration
   }, [onBack]);
 
