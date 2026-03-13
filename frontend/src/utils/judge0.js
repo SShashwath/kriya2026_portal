@@ -23,6 +23,7 @@ export const JUDGE0_LANGUAGE_IDS = {
   javascript: 63,  // Node.js JS
   cpp:        54,  // C++ (GCC 9.2.0)
   java:       62,  // Java (OpenJDK 13)
+  c:          50,  // C (GCC 9.2.0)
 };
 
 // ─── Simulate Delay ───────────────────────────

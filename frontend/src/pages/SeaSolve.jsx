@@ -56,11 +56,12 @@ export default function SeaSolve() {
       if (data.correct) {
         const earned = Number(data.earnedPoints ?? 0);
         const card = data.card ?? null;
+        const actionCard = data.actionCard ?? null;
         markSeaOpened(seaId, earned, card);
 
         navigate("/codequest/anchorage", {
           replace: true,
-          state: { ship: location.state?.ship, kriyaID, reward: { seaId, earned, card } }
+          state: { ship: location.state?.ship, kriyaID, reward: { seaId, earned, card, actionCard } }
         });
       } else setMsg(data.msg || "Wrong answer!");
     } catch (err) { setMsg(err.message || "Network error"); }

@@ -69,7 +69,7 @@ const MapPage = () => {
 
     // Filter available cards from GameContext
     const availableCards = React.useMemo(() => {
-        if (!gameCards || gameCards.length === 0 || allAlgoCards.length === 0) return [];
+        if (!gameCards || gameCards.length === 0) return [];
         
         return gameCards.map(c => {
             const normalizedName = (c.name || '').toLowerCase().replace(/\s+/g, '');
@@ -107,16 +107,44 @@ const MapPage = () => {
             if (teamData) fetchPlayerActionCards(teamData.kriyaID);
         });
         fetchAlgos();
-        // If cards are already chosen from a previous session, fetch the associated questions for the islands
-        if (cardsChosen && selectedCards.length === 3) {
-            fetchR2Questions(selectedCards);
-        }
     }, []);
+
+    // Enrich selectedCards with realId once allAlgoCards are loaded
+    React.useEffect(() => {
+        if (allAlgoCards.length > 0 && selectedCards.length > 0) {
+            let changed = false;
+            const enriched = selectedCards.map(sc => {
+                if (sc.realId) return sc;
+                const normalizedName = (sc.name || '').toLowerCase().replace(/\s+/g, '');
+                const match = allAlgoCards.find(ac => ac.name.toLowerCase().replace(/\s+/g, '') === normalizedName);
+                if (match) {
+                    changed = true;
+                    return { ...sc, realId: match._id };
+                }
+                return sc;
+            });
+            if (changed) {
+                console.log("Enriched selected cards with IDs");
+                setSelectedCards(enriched);
+            }
+        }
+    }, [allAlgoCards]);
+
+    // Fetch questions when cards are chosen and have IDs
+    React.useEffect(() => {
+        if (cardsChosen && selectedCards.length === 3) {
+            // Only fetch if they all have realId or we wait for enrichment
+            const hasAllIds = selectedCards.every(c => c.realId);
+            if (hasAllIds) {
+                fetchR2Questions(selectedCards);
+            }
+        }
+    }, [cardsChosen, selectedCards]);
 
     async function fetchPlayerActionCards(kriyaID) {
         const token = localStorage.getItem("token");
         try {
-            const res = await fetch(`${API_BASE}/players/${kriyaID}/cards`, {
+            const res = await fetch(`${API_BASE}/api/players/${kriyaID}/cards`, {
                 headers: { "Authorization": `Bearer ${token}` }
             });
             const data = await res.json();
@@ -134,7 +162,7 @@ const MapPage = () => {
         const teamId = storedTeam.id || storedTeam._id || storedTeam.kriyaID || storedTeam.kriyaId || storedTeam.kriyaid;
 
         try {
-            const res = await fetch(`${API_BASE}/teams/profile/${teamId}`, {
+            const res = await fetch(`${API_BASE}/api/teams/profile/${teamId}`, {
                 headers: { "Authorization": `Bearer ${token}` }
             });
             const data = await res.json();
@@ -160,23 +188,24 @@ const MapPage = () => {
 
     const fetchR2Questions = async (pickedCards) => {
         try {
+            console.log("Fetching questions for cards:", pickedCards.map(c => c.name));
             const res = await fetch(`${API_BASE}/api/round2/questions`);
             const allQuestions = await res.json();
             if (!res.ok) return;
 
             const cardIds = pickedCards.map(c => c.realId).filter(Boolean);
             
-            // Filter questions that allow at least one of our picked algorithm cards
-            const filtered = allQuestions.filter(q => 
-                q.allowedAlgorithms.some(algoId => cardIds.includes(algoId))
-            );
+            // Map each selected algorithm to a question
+            // We want to ensure each selected card gets at least one question assigned to an island
+            const islandQuestions = cardIds.map(cid => {
+                return allQuestions.find(q => q.allowedAlgorithms.includes(cid));
+            }).filter(Boolean);
 
-            // Shuffling or picking top 3
-            setR2Questions(filtered.slice(0, 3));
-            if (filtered.length > 0) {
-               console.log("Loaded questions for islands:", filtered.slice(0,3));
-            } else {
-                alert("No questions found for the selected algorithms yet!");
+            setR2Questions(islandQuestions);
+            console.log(`Loaded ${islandQuestions.length} quests for islands.`);
+            
+            if (islandQuestions.length < 3) {
+                console.warn("Could not find 3 distinct quests for the selected scrolls.");
             }
         } catch (err) {
             console.error("Error fetching R2 questions", err);
@@ -288,11 +317,19 @@ const MapPage = () => {
         if (!activeChallenge) return;
 
         const token = localStorage.getItem("token");
+        const storedTeam = JSON.parse(localStorage.getItem("team") || "{}");
+        // Use kriyaID from state, or fallback to localStorage
+        const kriyaID = team?.kriyaID || storedTeam.kriyaID || storedTeam.id || storedTeam._id;
+
+        if (!kriyaID) {
+            alert("Team session not found. Please log in again.");
+            return;
+        }
 
         if (flagInput.trim() === activeChallenge.flag) {
             try {
                 // Award card via backend
-                const res = await fetch(`${API_BASE}/players/${team.kriyaID}/minigame-complete`, {
+                const res = await fetch(`${API_BASE}/api/players/${kriyaID}/minigame-complete`, {
                     method: "POST",
                     headers: { 
                         "Content-Type": "application/json",
@@ -306,7 +343,7 @@ const MapPage = () => {
                     if (result.card) {
                         alert(`Success! You have won the ${result.card.name} action card!`);
                         // Refresh inventory
-                        fetchPlayerActionCards(team.kriyaID);
+                        fetchPlayerActionCards(kriyaID);
                     } else {
                         alert("Success! You have already claimed all available action cards.");
                     }
@@ -328,17 +365,21 @@ const MapPage = () => {
         if (!window.confirm(`Are you sure you want to use the ${cardName} card?`)) return;
 
         const token = localStorage.getItem("token");
-        // We need the ACTUAL card object ID, which is stored in the inventory item's cardId field
-        // But the backend expects cardId in the URL.
-        // Looking at the inventory data structure: { _id, teamId, cardId: { _id, name, ... }, isUsed, ... }
-        
+        const storedTeam = JSON.parse(localStorage.getItem("team") || "{}");
+        const kriyaID = team?.kriyaID || storedTeam.kriyaID || storedTeam.id || storedTeam._id;
+
+        if (!kriyaID) {
+            alert("Team session not found. Please log in again.");
+            return;
+        }
+
         const inventoryItem = unlockedActionCards.find(c => c._id === cardInventoryId);
         if (!inventoryItem) return;
 
-        const cardId = inventoryItem.cardId._id;
+        const cardId = inventoryItem.cardId._id || inventoryItem.cardId;
 
         try {
-            const res = await fetch(`${API_BASE}/players/${team.kriyaID}/cards/${cardId}/use`, {
+            const res = await fetch(`${API_BASE}/api/players/${kriyaID}/cards/${cardId}/use`, {
                 method: "POST",
                 headers: { 
                     "Authorization": `Bearer ${token}`
@@ -349,7 +390,7 @@ const MapPage = () => {
             if (res.ok) {
                 alert(`Card Activated: ${result.effect}`);
                 // Refresh inventory
-                fetchPlayerActionCards(team.kriyaID);
+                fetchPlayerActionCards(kriyaID);
             } else {
                 alert(result.msg || "Failed to activate card.");
             }

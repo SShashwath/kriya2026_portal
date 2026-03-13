@@ -23,6 +23,7 @@ export default function Anchorage() {
   const [fly, setFly] = useState(false);
   const [showCard, setShowCard] = useState(false);
   const [pendingCard, setPendingCard] = useState(null);
+  const [pendingActionCard, setPendingActionCard] = useState(null);
 
   const [questions, setQuestions] = useState([]);
   const ROUND_SECONDS = 30 * 60;
@@ -43,9 +44,9 @@ export default function Anchorage() {
   // Fetch questions
   const fetchQuestions = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/round1/questions/${kriyaID}`);
+      const res = await fetch(`${API_BASE}/api/round1/questions?kriyaID=${kriyaID}`);
       const data = await res.json();
-      if (data.success) setQuestions(data.questions);
+      if (res.ok) setQuestions(data);
     } catch (err) { console.log("Error fetching questions", err); }
   };
 
@@ -70,20 +71,21 @@ export default function Anchorage() {
     return () => clearInterval(id);
   }, []);
 
-  const saveRewardToDB = async ({ seaId, earned, card }) => {
-    try {
-      await fetch(`${API_BASE}/api/reward`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kriyaID, seaId, pointsEarned: earned ?? 0, cardId: card?._id ?? null, shipId: selectedShip?.id ?? null })
-      });
-    } catch (e) { console.error("Reward save failed", e); }
-  };
 
   const closeCardPopup = () => {
-    if (pendingCard) addCard(pendingCard);
-    setShowCard(false);
-    setPendingCard(null);
+    if (pendingCard) {
+      addCard(pendingCard);
+      setPendingCard(null);
+      // If there's an action card waiting, keep showCard true but pendingCard is now null
+      if (!pendingActionCard) {
+        setShowCard(false);
+      }
+    } else if (pendingActionCard) {
+      setPendingActionCard(null);
+      setShowCard(false);
+    } else {
+      setShowCard(false);
+    }
   };
 
   // ⭐ Process reward
@@ -102,11 +104,20 @@ export default function Anchorage() {
     // Update points immediately
     markSeaOpened(seaId, earned, card);
 
-    saveRewardToDB({ seaId, earned, card });
-
     // Show card
+    const actionCard = reward.actionCard ?? null;
     if (card) {
       setPendingCard({ id: card._id ?? card.name, name: card.name, description: card.description });
+      setShowCard(true);
+    }
+    
+    if (actionCard) {
+      setPendingActionCard({ 
+        id: actionCard._id ?? actionCard.name, 
+        name: actionCard.name, 
+        description: actionCard.description,
+        isAction: true 
+      });
       setShowCard(true);
     }
 
@@ -163,12 +174,15 @@ export default function Anchorage() {
         </div>
       ))}
 
-      {showCard && pendingCard && (
+      {showCard && (pendingCard || pendingActionCard) && (
         <div className="card-overlay" onClick={closeCardPopup}>
-          <div className="algo-modal" onClick={e => e.stopPropagation()}>
-            <h2 className="algo-name">{pendingCard.name}</h2>
-            <p className="algo-desc">{pendingCard.description}</p>
-            <button className="close-card-btn" onClick={closeCardPopup}>Close</button>
+          <div className={`algo-modal ${!pendingCard && pendingActionCard ? "action-card-modal" : ""}`} onClick={e => e.stopPropagation()}>
+            <div className="card-type-badge">{!pendingCard && pendingActionCard ? "ACTION CARD" : "ALGORITHM CARD"}</div>
+            <h2 className="algo-name">{(pendingCard || pendingActionCard).name}</h2>
+            <p className="algo-desc">{(pendingCard || pendingActionCard).description}</p>
+            <button className="close-card-btn" onClick={closeCardPopup}>
+              {pendingCard && pendingActionCard ? "Next Card →" : "Close"}
+            </button>
           </div>
         </div>
       )}

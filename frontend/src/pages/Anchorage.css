@@ -522,3 +522,37 @@
 
 .chip-icon { font-size: 14px; }
 .chip-name { letter-spacing: 0.06em; }
+
+/* ── Action Card Modal Styles ── */
+.action-card-modal {
+  border-color: #3498db !important;
+  box-shadow: 0 30px 80px rgba(52, 152, 219, 0.2) !important;
+}
+
+.action-card-modal .algo-name {
+  color: #3498db !important;
+}
+
+.action-card-modal .close-card-btn {
+  background: #3498db !important;
+  color: #fff !important;
+}
+
+.action-card-modal .close-card-btn:hover {
+  background: #2980b9 !important;
+}
+
+.card-type-badge {
+  font-family: var(--a-font-title);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  color: #8a7a64;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+.action-card-modal .card-type-badge {
+  color: #3498db !important;
+  opacity: 0.8;
+}
