@@ -153,7 +153,7 @@ const AdminPage = () => {
                         id: team._id,
                         name: team.teamName || "Unnamed Team",
                         points: team.totalScore || 0,
-                        algoCards: team.round1?.selectedScrolls?.map(s => s.name || s) || [],
+                        selectedScrolls: team.round1?.selectedScrolls || [],
                         actionCards: team.round2?.actionCardsUsed?.map(c => c.cardId || c) || [],
                         currentQuestionNo: team.currentQuestionNo || 1
                     };
@@ -435,22 +435,31 @@ const AdminPage = () => {
         if (!team) return;
 
         let currentCards = [...(team[field] || [])];
-        if (currentCards.includes(cardName)) {
-            currentCards = currentCards.filter(c => c !== cardName);
-        } else {
-            if (currentCards.length >= limit) {
-                alert(`Limit reached: Maximum ${limit} cards allowed.`);
-                return;
+        if (field === 'selectedScrolls') {
+            const existing = currentCards.find(s => s.name === cardName);
+            if (existing) {
+                currentCards = currentCards.filter(s => s.name !== cardName);
+            } else {
+                currentCards.push({ name: cardName, questionNo: 0 });
             }
-            currentCards.push(cardName);
+        } else {
+            if (currentCards.includes(cardName)) {
+                currentCards = currentCards.filter(c => c !== cardName);
+            } else {
+                if (currentCards.length >= limit) {
+                    alert(`Limit reached: Maximum ${limit} cards allowed.`);
+                    return;
+                }
+                currentCards.push(cardName);
+            }
         }
 
         try {
             const token = localStorage.getItem("adminToken");
             
             // Format data based on what the backend expects
-            const payload = field === 'algoCards' 
-                ? { "round1.selectedScrolls": currentCards.map(name => ({ name })) }
+            const payload = field === 'selectedScrolls' 
+                ? { "round1.selectedScrolls": currentCards }
                 : { "round2.actionCardsUsed": currentCards.map(id => ({ cardId: id })) };
 
             const res = await fetch(`${ADMIN_API}/teams/${teamId}`, {
@@ -471,6 +480,40 @@ const AdminPage = () => {
         } catch (err) {
             console.error("Failed to update team cards", err);
             alert("Connection error while updating cards");
+        }
+    };
+
+    const updateQuestionNo = async (teamId, cardName, questionNo) => {
+        const team = teams.find(t => t.id === teamId);
+        if (!team) return;
+
+        const currentCards = [...(team.selectedScrolls || [])];
+        const index = currentCards.findIndex(s => s.name === cardName);
+        if (index === -1) return;
+
+        currentCards[index].questionNo = questionNo;
+
+        try {
+            const token = localStorage.getItem("adminToken");
+            const payload = { "round1.selectedScrolls": currentCards };
+            const res = await fetch(`${ADMIN_API}/teams/${teamId}`, {
+                method: "PUT",
+                headers: { 
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}` 
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                fetchTeams(); // Refresh to show changes
+            } else {
+                const errorData = await res.json();
+                alert(`Update failed: ${errorData.msg || "Unknown error"}`);
+            }
+        } catch (err) {
+            console.error("Failed to update questionNo", err);
+            alert("Connection error while updating questionNo");
         }
     };
 
@@ -554,7 +597,7 @@ const AdminPage = () => {
                                         <div className="team-card-stats">
                                             <div className="stat-pill">Points: <span>{team.points}</span></div>
                                             <div className="stat-pill">Question: <span>{team.currentQuestionNo}</span></div>
-                                            <div className="stat-pill">Algos: <span>{team.algoCards.length}/3</span></div>
+                                            <div className="stat-pill">Algos: <span>{team.selectedScrolls.length}</span></div>
                                             <div className="stat-pill">Actions: <span>{team.actionCards.length}/4</span></div>
                                         </div>
                                         <button className="manage-btn">Manage Team</button>
@@ -700,34 +743,40 @@ const AdminPage = () => {
                                             <button className="apply-btn" onClick={handlePointsChange}>Update</button>
                                         </div>
                                     </div>
-                                    <div className="control-box">
-                                        <label>Current Question No.</label>
-                                        <input
-                                            type="number"
-                                            value={editingTeam.currentQuestionNo}
-                                            onChange={e => updateTeamLocally(editingTeam.id, { currentQuestionNo: parseInt(e.target.value) || 1 })}
-                                            min="1"
-                                        />
-                                    </div>
                                 </div>
                             </div>
 
                             <div className="modal-section">
                                 <div className="section-header-row">
                                     <h3>Algorithm Cards</h3>
-                                    <span className="limit-count">{editingTeam.algoCards.length}/3 Slots Used</span>
+                                    <span className="limit-count">{editingTeam.selectedScrolls.length} Selected</span>
                                 </div>
                                 <div className="card-pill-grid">
                                     {algorithmCards.map(card => {
-                                        const active = editingTeam.algoCards.includes(card.name);
+                                        const scroll = editingTeam.selectedScrolls.find(s => s.name === card.name);
+                                        const active = !!scroll;
                                         return (
-                                            <button
-                                                key={card._id}
-                                                className={`action-pill algo ${active ? 'active' : ''}`}
-                                                onClick={() => toggleCard(editingTeam.id, 'algoCards', card.name, 3)}
-                                            >
-                                                {card.name} {active ? '✓' : '+'}
-                                            </button>
+                                            <div key={card._id} className="algo-card-item">
+                                                <button
+                                                    className={`action-pill algo ${active ? 'active' : ''}`}
+                                                    onClick={() => toggleCard(editingTeam.id, 'selectedScrolls', card.name, 3)}
+                                                >
+                                                    {card.name} {active ? '✓' : '+'}
+                                                </button>
+                                                {active && (
+                                                    <select
+                                                        value={scroll.questionNo || 0}
+                                                        onChange={e => updateQuestionNo(editingTeam.id, card.name, parseInt(e.target.value))}
+                                                        style={{ width: '60px', marginLeft: '5px' }}
+                                                    >
+                                                        <option value={0}>0</option>
+                                                        <option value={1}>1</option>
+                                                        <option value={2}>2</option>
+                                                        <option value={3}>3</option>
+                                                        <option value={4}>4</option>
+                                                    </select>
+                                                )}
+                                            </div>
                                         );
                                     })}
                                 </div>
