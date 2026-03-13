@@ -29,7 +29,11 @@ function loadSaved() {
   try {
     const raw = sessionStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
-    return JSON.parse(raw);
+    const saved = JSON.parse(raw);
+    const team = JSON.parse(localStorage.getItem("team") || "null");
+    const currentKriyaID = team?.kriyaID;
+    if (saved.kriyaID !== currentKriyaID) return null; // Different team, don't load
+    return saved;
   } catch {
     return null;
   }
@@ -37,6 +41,8 @@ function loadSaved() {
 
 export function GameProvider({ children }) {
   const saved = loadSaved();
+  const team = JSON.parse(localStorage.getItem("team") || "null");
+  const currentKriyaID = team?.kriyaID;
 
   const [points, setPoints] = useState(() => Number(saved?.points ?? 0));
   const [opened, setOpened] = useState(() => {
@@ -53,9 +59,9 @@ export function GameProvider({ children }) {
   useEffect(() => {
     sessionStorage.setItem(
       STORAGE_KEY,
-      JSON.stringify({ points, opened: Array.from(opened), cards })
+      JSON.stringify({ points, opened: Array.from(opened), cards, kriyaID: currentKriyaID })
     );
-  }, [points, opened, cards]);
+  }, [points, opened, cards, currentKriyaID]);
 
   const chests = useMemo(() => {
     return seaNames.map((name, index) => {
