@@ -8,6 +8,8 @@ import Signup from "./components/Signup";
 import Login from "./components/Login";
 import OtpPage from "./pages/OtpPage";
 import PirateArena from "./PirateArena";
+import ProtectedRoute from "./components/ProtectedRoute";
+import NotFound from "./pages/NotFound";
 
 function TempNav() {
   return (
@@ -31,17 +33,28 @@ export default function App() {
       <TempNav />
       <Routes>
         <Route path="/" element={<Navigate to="/codequest" replace />} />
+        
         <Route path="/codequest">
+          {/* Public Routes */}
           <Route index element={<Signup />} />
           <Route path="login" element={<Login />} />
           <Route path="otp" element={<OtpPage />} />
-          <Route path="shiplanding" element={<ShipLanding />} />
-          <Route path="anchorage" element={<Anchorage />} />
-          <Route path="team/:kriyaID/sea/:seaId" element={<SeaSolve />} />
-          <Route path="map" element={<MapPage />} />
-          <Route path="admin" element={<AdminPage />} />
-          <Route path="arena" element={<PirateArena />} />
+          
+          {/* Protected Routes */}
+          <Route path="shiplanding" element={<ProtectedRoute><ShipLanding /></ProtectedRoute>} />
+          <Route path="anchorage" element={<ProtectedRoute><Anchorage /></ProtectedRoute>} />
+          <Route path="team/:kriyaID/sea/:seaId" element={<ProtectedRoute><SeaSolve /></ProtectedRoute>} />
+          <Route path="map" element={<ProtectedRoute><MapPage /></ProtectedRoute>} />
+          <Route path="admin" element={<ProtectedRoute><AdminPage /></ProtectedRoute>} />
+          <Route path="arena" element={<ProtectedRoute><PirateArena /></ProtectedRoute>} />
+          
+          {/* 404 - Inside /codequest */}
+          <Route path="*" element={<NotFound />} />
         </Route>
+
+        {/* Global 404 */}
+        <Route path="*" element={<Navigate to="/codequest/404" replace />} />
+        <Route path="/codequest/404" element={<NotFound />} />
       </Routes>
     </BrowserRouter>
   );
