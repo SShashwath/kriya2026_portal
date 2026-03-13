@@ -30,7 +30,7 @@ export default function Anchorage() {
   // Fetch questions
   const fetchQuestions = async () => {
     try {
-      const res = await fetch(`http://localhost:3000/kriyabe/api/round1/questions/${kriyaID}`);
+      const res = await fetch(`http://localhost:5000/kriyabe/api/round1/questions/${kriyaID}`);
       const data = await res.json();
       if (data.success) setQuestions(data.questions);
     } catch (err) { console.log("Error fetching questions", err); }

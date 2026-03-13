@@ -23,6 +23,20 @@ const AdminPage = () => {
         timeLimitSec: 60
     });
 
+    // Round 2 State
+    const [round2Questions, setRound2Questions] = useState([]);
+    const [isR2ModalOpen, setIsR2ModalOpen] = useState(false);
+    const [editingR2Id, setEditingR2Id] = useState(null);
+    const [r2Form, setR2Form] = useState({
+        title: "",
+        description: "",
+        allowedAlgorithms: [],
+        timeLimitSec: 300,
+        testCases: [{ input: "", output: "", isHidden: false }]
+    });
+
+    const [algorithmCards, setAlgorithmCards] = useState([]);
+
     // Auth state
     const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem("adminToken"));
     const [loginData, setLoginData] = useState({ username: "", password: "" });
@@ -39,8 +53,36 @@ const AdminPage = () => {
         if (isLoggedIn) {
             fetchTeams();
             fetchRound1Questions();
+            fetchRound2Questions();
+            fetchAlgorithmCards();
         }
     }, [isLoggedIn]);
+
+    const fetchAlgorithmCards = async () => {
+        try {
+            const token = localStorage.getItem("adminToken");
+            const res = await fetch(`${API_BASE}/algorithmcard`, {
+                headers: { "Authorization": `Bearer ${token}` }
+            });
+            const data = await res.json();
+            if (res.ok) setAlgorithmCards(data);
+        } catch (err) {
+            console.error("Failed to fetch algo cards", err);
+        }
+    };
+
+    const fetchRound2Questions = async () => {
+        try {
+            const token = localStorage.getItem("adminToken");
+            const res = await fetch(`${API_BASE}/round2/questions`, {
+                headers: { "Authorization": `Bearer ${token}` }
+            });
+            const data = await res.json();
+            if (res.ok) setRound2Questions(data);
+        } catch (err) {
+            console.error("Failed to fetch round 2 questions", err);
+        }
+    };
 
     const fetchRound1Questions = async () => {
         try {
@@ -260,6 +302,101 @@ const AdminPage = () => {
         }
     };
 
+    // Round 2 Handlers
+    const handleR2QuestionSubmit = async (e) => {
+        e.preventDefault();
+        const token = localStorage.getItem("adminToken");
+        const method = editingR2Id ? "PUT" : "POST";
+        const url = editingR2Id 
+            ? `${API_BASE}/round2/questions/${editingR2Id}` 
+            : `${API_BASE}/round2/questions`;
+
+        try {
+            const res = await fetch(url, {
+                method,
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}`
+                },
+                body: JSON.stringify(r2Form)
+            });
+            if (res.ok) {
+                fetchRound2Questions();
+                setIsR2ModalOpen(false);
+                resetR2Form();
+            } else {
+                const data = await res.json();
+                alert(data.msg || "Operation failed");
+            }
+        } catch (err) {
+            alert("Connection error");
+        }
+    };
+
+    const resetR2Form = () => {
+        setR2Form({
+            title: "",
+            description: "",
+            allowedAlgorithms: [],
+            timeLimitSec: 300,
+            testCases: [{ input: "", output: "", isHidden: false }]
+        });
+        setEditingR2Id(null);
+    };
+
+    const handleEditR2Question = (q) => {
+        setEditingR2Id(q._id);
+        setR2Form({
+            title: q.title,
+            description: q.description,
+            allowedAlgorithms: q.allowedAlgorithms || [],
+            timeLimitSec: q.timeLimitSec,
+            testCases: q.testCases || [{ input: "", output: "", isHidden: false }]
+        });
+        setIsR2ModalOpen(true);
+    };
+
+    const handleDeleteR2Question = async (id) => {
+        if (!window.confirm("Delete this Round 2 question?")) return;
+        const token = localStorage.getItem("adminToken");
+        try {
+            const res = await fetch(`${API_BASE}/round2/questions/${id}`, {
+                method: "DELETE",
+                headers: { "Authorization": `Bearer ${token}` }
+            });
+            if (res.ok) fetchRound2Questions();
+        } catch (err) {
+            alert("Delete failed");
+        }
+    };
+
+    const addTestCase = () => {
+        setR2Form({
+            ...r2Form,
+            testCases: [...r2Form.testCases, { input: "", output: "", isHidden: false }]
+        });
+    };
+
+    const removeTestCase = (idx) => {
+        const newTC = r2Form.testCases.filter((_, i) => i !== idx);
+        setR2Form({ ...r2Form, testCases: newTC });
+    };
+
+    const handleTestCaseChange = (idx, field, value) => {
+        const newTC = [...r2Form.testCases];
+        newTC[idx][field] = value;
+        setR2Form({ ...r2Form, testCases: newTC });
+    };
+
+    const toggleAlgoSelection = (algoId) => {
+        const current = [...r2Form.allowedAlgorithms];
+        if (current.includes(algoId)) {
+            setR2Form({ ...r2Form, allowedAlgorithms: current.filter(id => id !== algoId) });
+        } else {
+            setR2Form({ ...r2Form, allowedAlgorithms: [...current, algoId] });
+        }
+    };
+
     const toggleCard = (teamId, field, card, limit) => {
         // Disabled for now as backend doesn't support
         alert("Algo/Action cards integration is not ready in backend yet.");
@@ -306,6 +443,7 @@ const AdminPage = () => {
                 <nav className="admin-nav">
                     <button className={activeTab === "teams" ? "active" : ""} onClick={() => setActiveTab("teams")}>Teams Control</button>
                     <button className={activeTab === "round1" ? "active" : ""} onClick={() => setActiveTab("round1")}>Round 1 Questions</button>
+                    <button className={activeTab === "round2" ? "active" : ""} onClick={() => setActiveTab("round2")}>Round 2 Questions</button>
                     <button className={activeTab === "leaderboard" ? "active" : ""} onClick={() => setActiveTab("leaderboard")}>Leaderboard</button>
                 </nav>
             </aside>
@@ -316,6 +454,7 @@ const AdminPage = () => {
                         {activeTab === "teams" && "Live Operations"}
                         {activeTab === "leaderboard" && "Current Rankings"}
                         {activeTab === "round1" && "Round 1 Question Bank"}
+                        {activeTab === "round2" && "Round 2 Coding Problems"}
                     </h1>
                     <div className="admin-status">System Status: <span>Active</span></div>
                 </header>
@@ -413,6 +552,41 @@ const AdminPage = () => {
                                             <div className="q-actions">
                                                 <button className="edit-q-btn" onClick={() => handleEditQuestion(q)}>Edit</button>
                                                 <button className="delete-q-btn" onClick={() => handleDeleteQuestion(q._id)}>Delete</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === "round2" && (
+                        <div className="round-questions-view">
+                            <div className="view-header-row">
+                                <button className="add-question-btn" onClick={() => {
+                                    resetR2Form();
+                                    setIsR2ModalOpen(true);
+                                }}>
+                                    + Add Coding Problem
+                                </button>
+                            </div>
+                            <div className="questions-grid">
+                                {round2Questions.map(q => (
+                                    <div key={q._id} className="question-card">
+                                        <div className="q-card-header">
+                                            <span className="type-badge">Coding</span>
+                                            <span className="sea-badge">{q.timeLimitSec}s</span>
+                                        </div>
+                                        <h3 className="q-title">{q.title}</h3>
+                                        <p className="q-text">{q.description?.substring(0, 100)}...</p>
+                                        <div className="q-card-footer">
+                                            <div className="q-stats">
+                                                <span>🧪 {q.testCases?.length} Tests</span>
+                                                <span>📜 {q.allowedAlgorithms?.length} Scrolls</span>
+                                            </div>
+                                            <div className="q-actions">
+                                                <button className="edit-q-btn" onClick={() => handleEditR2Question(q)}>Edit</button>
+                                                <button className="delete-q-btn" onClick={() => handleDeleteR2Question(q._id)}>Delete</button>
                                             </div>
                                         </div>
                                     </div>
@@ -609,6 +783,111 @@ const AdminPage = () => {
                                 <button type="submit" className="done-btn">
                                     {editingQuestionId ? "Update Question" : "Create Question"}
                                 </button>
+                            </footer>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Round 2 Modal */}
+            {isR2ModalOpen && (
+                <div className="modal-overlay" onClick={() => setIsR2ModalOpen(false)}>
+                    <div className="neat-modal r2-modal" onClick={e => e.stopPropagation()}>
+                        <header className="modal-header">
+                            <div>
+                                <h2>{editingR2Id ? "Edit" : "Add"} Round 2 Coding Problem</h2>
+                                <p style={{ color: '#8b949e', fontSize: '0.8rem' }}>Set problem statement, test cases, and allowed algorithms</p>
+                            </div>
+                            <button className="close-modal-btn" onClick={() => setIsR2ModalOpen(false)}>&times;</button>
+                        </header>
+                        <form className="modal-sections" onSubmit={handleR2QuestionSubmit}>
+                            <div className="modal-section scrollable">
+                                <div className="control-box full-width">
+                                    <label>Title</label>
+                                    <input 
+                                        type="text" 
+                                        value={r2Form.title} 
+                                        onChange={e => setR2Form({...r2Form, title: e.target.value})} 
+                                        required 
+                                    />
+                                </div>
+                                <div className="control-box full-width">
+                                    <label>Description</label>
+                                    <textarea 
+                                        value={r2Form.description} 
+                                        onChange={e => setR2Form({...r2Form, description: e.target.value})} 
+                                        rows="5" 
+                                        required 
+                                    />
+                                </div>
+                                <div className="input-group-grid">
+                                    <div className="input-col">
+                                        <label>Time Limit (Sec)</label>
+                                        <input 
+                                            type="number" 
+                                            value={r2Form.timeLimitSec} 
+                                            onChange={e => setR2Form({...r2Form, timeLimitSec: parseInt(e.target.value)})} 
+                                            required 
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="modal-section">
+                                    <h3>Allowed Algorithms (Scrolls)</h3>
+                                    <div className="card-pill-grid">
+                                        {algorithmCards.map(algo => (
+                                            <button
+                                                key={algo._id}
+                                                type="button"
+                                                className={`action-pill algo ${r2Form.allowedAlgorithms.includes(algo._id) ? 'active' : ''}`}
+                                                onClick={() => toggleAlgoSelection(algo._id)}
+                                            >
+                                                {algo.name}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="modal-section">
+                                    <div className="section-header-row">
+                                        <h3>Test Cases</h3>
+                                        <button type="button" className="add-tc-btn" onClick={addTestCase}>+ Add Case</button>
+                                    </div>
+                                    <div className="test-cases-list">
+                                        {r2Form.testCases.map((tc, idx) => (
+                                            <div key={idx} className="tc-item">
+                                                <div className="tc-header">
+                                                    <span>Case #{idx + 1}</span>
+                                                    <button type="button" onClick={() => removeTestCase(idx)}>&times;</button>
+                                                </div>
+                                                <div className="tc-inputs">
+                                                    <textarea 
+                                                        placeholder="Input" 
+                                                        value={tc.input} 
+                                                        onChange={e => handleTestCaseChange(idx, "input", e.target.value)} 
+                                                    />
+                                                    <textarea 
+                                                        placeholder="Expected Output" 
+                                                        value={tc.output} 
+                                                        onChange={e => handleTestCaseChange(idx, "output", e.target.value)} 
+                                                    />
+                                                </div>
+                                                <label className="hidden-check">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        checked={tc.isHidden} 
+                                                        onChange={e => handleTestCaseChange(idx, "isHidden", e.target.checked)} 
+                                                    />
+                                                    Hidden Test Case
+                                                </label>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                            <footer className="modal-footer">
+                                <button type="button" className="cancel-footer-btn" onClick={() => setIsR2ModalOpen(false)}>Cancel</button>
+                                <button type="submit" className="done-btn">Save Problem</button>
                             </footer>
                         </form>
                     </div>

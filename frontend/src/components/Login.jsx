@@ -24,7 +24,7 @@ function Login({ onLoginSuccess }) {
 
         try {
 
-            const res = await fetch("http://localhost:3000/kriyabe/api/auth/login", {
+            const res = await fetch("http://localhost:5000/kriyabe/api/auth/login", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json"
@@ -41,8 +41,9 @@ function Login({ onLoginSuccess }) {
                 setError(data.message)
             } else {
 
-                // store team info for later pages
+                // store team info and token for later pages
                 localStorage.setItem("team", JSON.stringify(data.team))
+                localStorage.setItem("token", data.token)
                 
                 // navigate to ship landing
                 navigate("/ShipLanding")
