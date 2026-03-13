@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mao Kun Map — Ring Puzzle</title>
+    <link href="https://fonts.googleapis.com/css2?family=Pirata+One&family=MedievalSharp&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: radial-gradient(ellipse at center, #0f1a2e 0%, #070d1a 50%, #020408 100%);
+            overflow: hidden;
+            font-family: 'MedievalSharp', cursive;
+            color: #c9a84c;
+            position: relative;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23c9a84c' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .game-title {
+            font-family: 'Pirata One', cursive;
+            font-size: clamp(1.8rem, 5vw, 3rem);
+            color: #c9a84c;
+            text-shadow:
+                0 0 10px rgba(201, 168, 76, 0.5),
+                0 0 30px rgba(201, 168, 76, 0.2),
+                2px 2px 4px rgba(0, 0, 0, 0.8);
+            margin-bottom: 8px;
+            letter-spacing: 3px;
+            z-index: 1;
+            text-align: center;
+        }
+
+        .subtitle {
+            font-size: clamp(0.75rem, 2vw, 1rem);
+            color: #8a7a4a;
+            margin-bottom: 20px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            z-index: 1;
+            text-align: center;
+        }
+
+        .canvas-container {
+            position: relative;
+            z-index: 1;
+        }
+
+        canvas {
+            display: block;
+            border-radius: 50%;
+            box-shadow:
+                0 0 0 3px #c9a84c44,
+                0 0 0 6px #0a0a1a,
+                0 0 0 8px #c9a84c22,
+                0 0 40px rgba(201, 168, 76, 0.15),
+                0 0 80px rgba(201, 168, 76, 0.05),
+                inset 0 0 60px rgba(0, 0, 0, 0.3);
+            cursor: pointer;
+            transition: box-shadow 0.3s ease;
+        }
+
+        canvas:hover {
+            box-shadow:
+                0 0 0 3px #c9a84c66,
+                0 0 0 6px #0a0a1a,
+                0 0 0 8px #c9a84c44,
+                0 0 50px rgba(201, 168, 76, 0.25),
+                0 0 100px rgba(201, 168, 76, 0.1),
+                inset 0 0 60px rgba(0, 0, 0, 0.3);
+        }
+
+        .hud {
+            display: flex;
+            align-items: center;
+            gap: 24px;
+            margin-top: 20px;
+            z-index: 1;
+        }
+
+        .move-counter {
+            font-family: 'Pirata One', cursive;
+            font-size: 1.2rem;
+            color: #c9a84c;
+            text-shadow: 0 0 8px rgba(201, 168, 76, 0.3);
+        }
+
+        .btn {
+            font-family: 'Pirata One', cursive;
+            font-size: 1rem;
+            color: #c9a84c;
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            border: 1px solid #c9a84c55;
+            padding: 8px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            letter-spacing: 1px;
+            transition: all 0.3s ease;
+        }
+
+        .btn:hover {
+            background: linear-gradient(135deg, #1f2040, #1a2848);
+            border-color: #c9a84c99;
+            box-shadow: 0 0 15px rgba(201, 168, 76, 0.2);
+            transform: translateY(-1px);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .instruction {
+            font-size: clamp(0.65rem, 1.5vw, 0.85rem);
+            color: #5a5a6a;
+            margin-top: 12px;
+            z-index: 1;
+            text-align: center;
+            line-height: 1.6;
+        }
+
+        /* Victory Overlay */
+        .victory-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(2, 4, 8, 0.92);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            z-index: 100;
+            backdrop-filter: blur(8px);
+        }
+
+        .victory-overlay.active {
+            display: flex;
+            animation: fadeIn 0.6s ease;
+        }
+
+        .victory-text {
+            font-family: 'Pirata One', cursive;
+            font-size: clamp(2rem, 6vw, 4rem);
+            color: #c9a84c;
+            text-shadow:
+                0 0 20px rgba(201, 168, 76, 0.6),
+                0 0 60px rgba(201, 168, 76, 0.3);
+            animation: victoryGlow 2s ease-in-out infinite alternate;
+            text-align: center;
+        }
+
+        .victory-sub {
+            font-family: 'MedievalSharp', cursive;
+            font-size: clamp(0.9rem, 2.5vw, 1.3rem);
+            color: #8a7a4a;
+            margin-top: 16px;
+            letter-spacing: 2px;
+        }
+
+        .victory-moves {
+            font-family: 'Pirata One', cursive;
+            font-size: 1.1rem;
+            color: #c9a84c88;
+            margin-top: 12px;
+        }
+
+        .victory-overlay .btn {
+            margin-top: 30px;
+            font-size: 1.1rem;
+            padding: 10px 32px;
+        }
+
+        .flag-reveal {
+            margin-top: 25px;
+            padding: 15px 30px;
+            background: rgba(201, 168, 76, 0.1);
+            border: 1px solid rgba(201, 168, 76, 0.4);
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 0 20px rgba(201, 168, 76, 0.1);
+        }
+
+        .flag-label {
+            display: block;
+            font-size: 0.8rem;
+            color: #8a7a4a;
+            margin-bottom: 5px;
+            letter-spacing: 2px;
+        }
+
+        .flag-code {
+            font-family: 'MedievalSharp', cursive;
+            font-size: 1.4rem;
+            color: #FFD700;
+            letter-spacing: 1px;
+            text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        @keyframes victoryGlow {
+            from {
+                text-shadow:
+                    0 0 20px rgba(201, 168, 76, 0.6),
+                    0 0 60px rgba(201, 168, 76, 0.3);
+            }
+
+            to {
+                text-shadow:
+                    0 0 40px rgba(201, 168, 76, 0.8),
+                    0 0 100px rgba(201, 168, 76, 0.5),
+                    0 0 150px rgba(201, 168, 76, 0.2);
+            }
+        }
+
+        /* Rotation feedback animation */
+        .rotating {
+            animation: clickPulse 0.3s ease;
+        }
+
+        @keyframes clickPulse {
+            0% {
+                filter: brightness(1);
+            }
+
+            50% {
+                filter: brightness(1.15);
+            }
+
+            100% {
+                filter: brightness(1);
+            }
+        }
+
+        /* Particles container */
+        .particles {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 101;
+        }
+
+        .particle {
+            position: absolute;
+            width: 6px;
+            height: 6px;
+            background: #c9a84c;
+            border-radius: 50%;
+            animation: particleFall linear forwards;
+        }
+
+        @keyframes particleFall {
+            0% {
+                opacity: 1;
+                transform: translateY(0) rotate(0deg) scale(1);
+            }
+
+            100% {
+                opacity: 0;
+                transform: translateY(100vh) rotate(720deg) scale(0);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="game-title">⚓ Mao Kun Map ⚓</div>
+    <div class="subtitle">The Ancient Navigator's Puzzle</div>
+
+    <div class="canvas-container">
+        <canvas id="canvas"></canvas>
+    </div>
+
+    <div class="hud">
+        <span class="move-counter">Moves: <span id="moveCount">0</span></span>
+        <button class="btn" id="shuffleBtn">Shuffle</button>
+    </div>
+
+    <div class="instruction">
+        Click outer rings to rotate 45° · Click center disc to flip
+    </div>
+
+    <!-- Victory Overlay -->
+    <div class="victory-overlay" id="victoryOverlay">
+        <div class="particles" id="particles"></div>
+        <div class="victory-text">🗺️ Map Restored!</div>
+        <div class="victory-sub">The ancient route is revealed</div>
+        <div class="flag-reveal">
+            <span class="flag-label">YOUR FLAG:</span>
+            <span class="flag-code">FLAG{R1ng_Puzzl3_Mast3r_2026}</span>
+        </div>
+        <div class="victory-moves" id="victoryMoves"></div>
+        <button class="btn" id="playAgainBtn">Sail Again</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById("canvas");
+        const ctx = canvas.getContext("2d");
+        const moveCountEl = document.getElementById("moveCount");
+        const victoryOverlay = document.getElementById("victoryOverlay");
+        const victoryMovesEl = document.getElementById("victoryMoves");
+        const particlesEl = document.getElementById("particles");
+
+        const img = new Image();
+        img.src = "FullOSTMap.webp";
+
+        const STEP_ANGLE = Math.PI / 4; // 45 degrees
+
+        const puzzleConfig = {
+            centerOffset: { x: 6, y: 2 },
+            rings: [
+                { inner: 0, outer: 145, rotation: 0, flipped: false, isCenter: true },
+                { inner: 145, outer: 190, rotation: 0, flipped: false, isCenter: false },
+                { inner: 190, outer: 255, rotation: 0, flipped: false, isCenter: false },
+                { inner: 255, outer: 380, rotation: 0, flipped: false, isCenter: false }
+            ]
+        };
+
+        let moves = 0;
+        let solved = false;
+        let canvasScale = 1;
+
+        // --- Image Load ---
+        img.onload = () => {
+            canvas.width = img.width;
+            canvas.height = img.height;
+            fitCanvas();
+            shuffle();
+            draw();
+        };
+
+        // --- Responsive Sizing ---
+        function fitCanvas() {
+            const maxW = Math.min(window.innerWidth * 0.9, 1100);
+            const maxH = window.innerHeight * 0.72;
+            const aspect = img.width / img.height;
+            let w = maxW;
+            let h = w / aspect;
+            if (h > maxH) {
+                h = maxH;
+                w = h * aspect;
+            }
+            canvasScale = w / img.width;
+            canvas.style.width = w + "px";
+            canvas.style.height = h + "px";
+        }
+
+        window.addEventListener("resize", () => {
+            fitCanvas();
+        });
+
+        // --- Center Calculation ---
+        function getCenter() {
+            return {
+                x: canvas.width / 2 + puzzleConfig.centerOffset.x,
+                y: canvas.height / 2 + puzzleConfig.centerOffset.y
+            };
+        }
+
+        // --- Normalize Angle ---
+        function normalizeAngle(a) {
+            a = a % (Math.PI * 2);
+            if (a < 0) a += Math.PI * 2;
+            if (Math.abs(a - Math.PI * 2) < 0.001) a = 0;
+            return a;
+        }
+
+        // --- Draw ---
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const { x: cx, y: cy } = getCenter();
+
+            // Draw each ring
+            puzzleConfig.rings.forEach(ring => {
+                ctx.save();
+
+                ctx.translate(cx, cy);
+
+                if (ring.isCenter) {
+                    // Center disc: flip vertically if flipped
+                    ctx.beginPath();
+                    ctx.arc(0, 0, ring.outer, 0, Math.PI * 2);
+                    ctx.clip();
+                    if (ring.flipped) {
+                        ctx.scale(1, -1); // flip the image vertically
+                    }
+                    ctx.drawImage(img, -cx, -cy);
+                } else {
+                    // Outer rings: rotate around center
+                    ctx.rotate(ring.rotation);
+                    ctx.beginPath();
+                    ctx.arc(0, 0, ring.outer, 0, Math.PI * 2);
+                    ctx.arc(0, 0, ring.inner, 0, Math.PI * 2, true);
+                    ctx.clip();
+                    ctx.drawImage(img, -cx, -cy);
+                }
+
+                ctx.restore();
+            });
+
+            // Draw ring gap lines
+            const gapColor = "rgba(201, 168, 76, 0.25)";
+            puzzleConfig.rings.forEach(ring => {
+                if (ring.inner > 0) {
+                    ctx.save();
+                    ctx.translate(cx, cy);
+                    ctx.beginPath();
+                    ctx.arc(0, 0, ring.inner, 0, Math.PI * 2);
+                    ctx.strokeStyle = gapColor;
+                    ctx.lineWidth = 1.5;
+                    ctx.stroke();
+                    ctx.restore();
+                }
+            });
+
+            // Outer border
+            const outerRing = puzzleConfig.rings[puzzleConfig.rings.length - 1];
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.beginPath();
+            ctx.arc(0, 0, outerRing.outer, 0, Math.PI * 2);
+            ctx.strokeStyle = "rgba(201, 168, 76, 0.15)";
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        // --- Click to Rotate / Shift ---
+        function handleClick(clientX, clientY) {
+            if (solved) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const mx = (clientX - rect.left) / canvasScale;
+            const my = (clientY - rect.top) / canvasScale;
+
+            const { x: cx, y: cy } = getCenter();
+            const dx = mx - cx;
+            const dy = my - cy;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            // Find clicked ring
+            const ring = puzzleConfig.rings.find(r => dist >= r.inner && dist <= r.outer);
+            if (!ring) return;
+
+            if (ring.isCenter) {
+                // Center ring: flip vertically on click
+                ring.flipped = !ring.flipped;
+            } else {
+                // Outer rings: rotate 45 degrees
+                if (dx > 0) {
+                    ring.rotation += STEP_ANGLE; // clockwise
+                } else {
+                    ring.rotation -= STEP_ANGLE; // counter-clockwise
+                }
+                ring.rotation = normalizeAngle(ring.rotation);
+            }
+
+            moves++;
+            moveCountEl.textContent = moves;
+
+            // Visual feedback
+            canvas.classList.add("rotating");
+            setTimeout(() => canvas.classList.remove("rotating"), 300);
+
+            draw();
+            checkWin();
+        }
+
+        // Mouse click
+        canvas.addEventListener("click", e => {
+            handleClick(e.clientX, e.clientY);
+        });
+
+        // Touch support
+        canvas.addEventListener("touchend", e => {
+            e.preventDefault();
+            const touch = e.changedTouches[0];
+            handleClick(touch.clientX, touch.clientY);
+        }, { passive: false });
+
+        // --- Win Check ---
+        function checkWin() {
+            const tolerance = 0.01;
+            const allSolved = puzzleConfig.rings.every(r => {
+                if (r.isCenter) {
+                    return !r.flipped;
+                }
+                const norm = normalizeAngle(r.rotation);
+                return norm < tolerance || norm > (Math.PI * 2 - tolerance);
+            });
+
+            if (allSolved) {
+                solved = true;
+                victoryMovesEl.textContent = `Completed in ${moves} moves`;
+                setTimeout(() => {
+                    victoryOverlay.classList.add("active");
+                    spawnParticles();
+                }, 400);
+            }
+        }
+
+        // --- Shuffle ---
+        function shuffle() {
+            solved = false;
+            moves = 0;
+            moveCountEl.textContent = "0";
+            victoryOverlay.classList.remove("active");
+
+            // Ensure at least one ring is not at 0 so puzzle isn't pre-solved
+            let allZero = true;
+            while (allZero) {
+                puzzleConfig.rings.forEach(r => {
+                    if (r.isCenter) {
+                        // Randomly flip or not
+                        r.flipped = Math.random() > 0.5;
+                    } else {
+                        // Random multiples of 45 degrees (0 to 7)
+                        const steps = Math.floor(Math.random() * 8);
+                        r.rotation = normalizeAngle(steps * STEP_ANGLE);
+                    }
+                });
+                allZero = puzzleConfig.rings.every(r => {
+                    if (r.isCenter) return !r.flipped;
+                    const norm = normalizeAngle(r.rotation);
+                    return norm < 0.01 || norm > (Math.PI * 2 - 0.01);
+                });
+            }
+
+            draw();
+        }
+
+        // --- Buttons ---
+        document.getElementById("shuffleBtn").addEventListener("click", () => {
+            shuffle();
+        });
+
+        document.getElementById("playAgainBtn").addEventListener("click", () => {
+            shuffle();
+        });
+
+        // --- Particles ---
+        function spawnParticles() {
+            particlesEl.innerHTML = "";
+            const colors = ["#c9a84c", "#e6c863", "#a08030", "#f0d878", "#daa520"];
+            for (let i = 0; i < 60; i++) {
+                const p = document.createElement("div");
+                p.className = "particle";
+                p.style.left = Math.random() * 100 + "%";
+                p.style.top = -10 + "px";
+                p.style.background = colors[Math.floor(Math.random() * colors.length)];
+                p.style.width = (3 + Math.random() * 6) + "px";
+                p.style.height = p.style.width;
+                p.style.animationDuration = (2 + Math.random() * 3) + "s";
+                p.style.animationDelay = Math.random() * 2 + "s";
+                p.style.opacity = 0.6 + Math.random() * 0.4;
+                particlesEl.appendChild(p);
+            }
+            setTimeout(() => { particlesEl.innerHTML = ""; }, 6000);
+        }
+    </script>
+</body>
+
+</html>

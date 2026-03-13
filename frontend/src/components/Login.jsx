@@ -42,9 +42,10 @@ function Login({ onLoginSuccess }) {
                 setError(data.message)
             } else {
 
-                // store team info for later pages
+                // store team info and token for later pages
                 localStorage.setItem("team", JSON.stringify(data.team))
-
+                localStorage.setItem("token", data.token)
+                
                 // navigate to ship landing
                 navigate("/codequest/shiplanding")
             }
