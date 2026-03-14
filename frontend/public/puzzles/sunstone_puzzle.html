@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Cursed Refraction — Master Architect</title>
+    <link href="https://fonts.googleapis.com/css2?family=Pirata+One&family=MedievalSharp&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --gold: #c9a84c;
+            --beam: #00ffff;
+            --bg: #03080d;
+        }
+
+        * { margin:0; padding:0; box-sizing: border-box; }
+
+        body {
+            min-height: 100vh;
+            background: radial-gradient(circle at center, #0a1520 0%, #02050a 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-family: 'MedievalSharp', cursive;
+            color: var(--gold);
+            overflow: hidden;
+        }
+
+        .game-ui {
+            text-align: center;
+            margin-bottom: 1rem;
+            z-index: 10;
+        }
+
+        .canvas-container {
+            position: relative;
+            padding: 10px;
+            background: #1a1510;
+            border: 5px solid var(--gold);
+            border-radius: 4px;
+            box-shadow: 0 0 100px rgba(0,0,0,0.9);
+        }
+
+        canvas {
+            background: #000;
+            display: block;
+            cursor: move;
+        }
+
+        .instruction {
+            margin-top: 1rem;
+            color: #5d4a35;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            text-align: center;
+        }
+
+        /* Success Overlay */
+        .victory-overlay {
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,0.95);
+            z-index: 100; display: none;
+            flex-direction: column; align-items: center; justify-content: center;
+            backdrop-filter: blur(20px);
+        }
+
+        .victory-overlay.active { display: flex; animation: fadeIn 0.8s; }
+
+        .flag-box {
+            border: 2px solid var(--gold);
+            padding: 3rem; border-radius: 12px;
+            background: rgba(201,168,76,0.05);
+            text-align: center;
+        }
+
+        .btn {
+            background: var(--gold); color: #000;
+            padding: 1rem 2.5rem; border: none;
+            font-family: 'Pirata One'; font-size: 1.5rem;
+            cursor: pointer; margin-top: 2rem;
+            border-radius: 4px;
+        }
+
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+    </style>
+</head>
+<body>
+
+    <div class="game-ui">
+        <h1 style="font-family: 'Pirata One'; font-size: 3rem;">The Cursed Refraction</h1>
+        <p style="color: #8a7a4a; letter-spacing: 2px;">Align the Sacred Beam through the Dark Obstacles</p>
+    </div>
+
+    <div class="canvas-container">
+        <canvas id="gameCanvas"></canvas>
+    </div>
+
+    <p class="instruction">DRAG PRISMS TO POSITION · DRAG EDGE TO ROTATE · LOCK ON TARGET</p>
+
+    <div class="victory-overlay" id="victoryOverlay">
+        <h2 style="font-family: 'Pirata One'; font-size: 4rem;">REFRACTION COMPLETE!</h2>
+        <div class="flag-box">
+            <span style="font-size: 0.8rem; color: #8a7a4a;">VAULT COORDINATES DECODED:</span>
+            <span style="display: block; font-size: 2.5rem; color: #fff; text-shadow: 0 0 15px var(--gold); margin-top: 1rem;">FLAG{B3am_B3nd3r_L3g3nd}</span>
+        </div>
+        <button class="btn" onclick="window.location.reload()">Reset Arena</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const victoryOverlay = document.getElementById('victoryOverlay');
+
+        let width = 900;
+        let height = 550;
+        let solved = false;
+
+        // Game objects
+        let prisms = [
+            { x: 200, y: 100, angle: 0.5, size: 35, type: 'prism' },
+            { x: 400, y: 100, angle: 2.1, size: 35, type: 'prism' },
+            { x: 600, y: 400, angle: -0.8, size: 35, type: 'prism' },
+            { x: 300, y: 450, angle: 1.5, size: 35, type: 'prism' }
+        ];
+
+        let obstacles = [
+            { x: 450, y: 275, w: 100, h: 20 },
+            { x: 150, y: 350, w: 20, h: 120 },
+            { x: 750, y: 150, w: 80, h: 80 }
+        ];
+
+        let source = { x: 50, y: 50, angle: 0.8 };
+        let target = { x: 800, y: 500, radius: 25 };
+
+        let interaction = {
+            target: null, // the prism being moved
+            mode: null, // 'move' or 'rotate'
+            lastX: 0,
+            lastY: 0
+        };
+
+        function resize() {
+            canvas.width = width;
+            canvas.height = height;
+        }
+
+        function isPointInPrism(mx, my, p) {
+            const dx = mx - p.x;
+            const dy = my - p.y;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            if (dist < p.size) return 'move';
+            if (dist < p.size + 20) return 'rotate';
+            return null;
+        }
+
+        function castRay() {
+            let px = source.x;
+            let py = source.y;
+            let pa = source.angle;
+            
+            let path = [{x: px, y: py}];
+            let maxBounces = 8;
+            let hitTarget = false;
+
+            for(let b=0; b<maxBounces; b++) {
+                let nearestDist = 2000;
+                let hitObj = null;
+
+                // Check Prisms (Hit detection on the REFLECTIVE FACE)
+                prisms.forEach(p => {
+                    // Line segment of the mirror face
+                    const x1 = p.x + Math.cos(p.angle - Math.PI/2) * p.size;
+                    const y1 = p.y + Math.sin(p.angle - Math.PI/2) * p.size;
+                    const x2 = p.x + Math.cos(p.angle + Math.PI/2) * p.size;
+                    const y2 = p.y + Math.sin(p.angle + Math.PI/2) * p.size;
+                    
+                    const hit = getIntersection(px, py, px + Math.cos(pa)*2000, py + Math.sin(pa)*2000, x1, y1, x2, y2);
+                    if (hit && hit.dist > 0.1 && hit.dist < nearestDist) {
+                        nearestDist = hit.dist;
+                        hitObj = { type: 'prism', prism: p };
+                    }
+                });
+
+                // Check Obstacles (Opaque)
+                 obstacles.forEach(ob => {
+                    // Check all 4 sides of rect
+                    const sides = [
+                        [ob.x - ob.w/2, ob.y - ob.h/2, ob.x + ob.w/2, ob.y - ob.h/2], // Top
+                        [ob.x + ob.w/2, ob.y - ob.h/2, ob.x + ob.w/2, ob.y + ob.h/2], // Right
+                        [ob.x + ob.w/2, ob.y + ob.h/2, ob.x - ob.w/2, ob.y + ob.h/2], // Bottom
+                        [ob.x - ob.w/2, ob.y + ob.h/2, ob.x - ob.w/2, ob.y - ob.h/2]  // Left
+                    ];
+                    sides.forEach(s => {
+                        const hit = getIntersection(px, py, px + Math.cos(pa)*2000, py + Math.sin(pa)*2000, s[0], s[1], s[2], s[3]);
+                        if (hit && hit.dist > 0.1 && hit.dist < nearestDist) {
+                            nearestDist = hit.dist;
+                            hitObj = { type: 'obstacle' };
+                        }
+                    });
+                });
+
+                // Check Target
+                const dxT = target.x - px;
+                const dyT = target.y - py;
+                const distToT = Math.sqrt(dxT*dxT + dyT*dyT);
+                const angleToT = Math.atan2(dyT, dxT);
+                let diffT = Math.abs(pa - angleToT);
+                while(diffT > Math.PI) diffT -= Math.PI*2;
+                if (Math.abs(diffT) < 0.05 && distToT < nearestDist) {
+                    nearestDist = distToT;
+                    hitTarget = true;
+                    hitObj = null;
+                }
+
+                px += Math.cos(pa) * nearestDist;
+                py += Math.sin(pa) * nearestDist;
+                path.push({x: px, y: py});
+
+                if (hitObj && hitObj.type === 'prism') {
+                    // pa_new = 2 * mirror_angle - pa_old
+                     pa = 2 * hitObj.prism.angle - pa;
+                } else {
+                    break;
+                }
+            }
+            return { path, hitTarget };
+        }
+
+        function getIntersection(x1, y1, x2, y2, x3, y3, x4, y4) {
+            const den = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+            if (den == 0) return null;
+            const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / den;
+            const u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / den;
+            if (t > 0 && t < 1 && u > 0 && u < 1) {
+                return { x: x1 + t * (x2 - x1), y: y1 + t * (y2 - y1), dist: t * 2000 };
+            }
+            return null;
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, width, height);
+
+            // Draw Obstacles
+            ctx.fillStyle = '#1a1a1a';
+            ctx.strokeStyle = '#444';
+            obstacles.forEach(ob => {
+                ctx.fillRect(ob.x - ob.w/2, ob.y - ob.h/2, ob.w, ob.h);
+                ctx.strokeRect(ob.x - ob.w/2, ob.y - ob.h/2, ob.w, ob.h);
+            });
+
+            // Draw Source
+            ctx.fillStyle = '#fff';
+            ctx.beginPath(); ctx.arc(source.x, source.y, 10, 0, Math.PI*2); ctx.fill();
+
+            // Draw Target
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = '#00ffff';
+            ctx.beginPath(); ctx.arc(target.x, target.y, target.radius, 0, Math.PI*2); ctx.stroke();
+            ctx.fillStyle = solved ? 'rgba(0, 255, 255, 0.4)' : 'transparent';
+            ctx.fill();
+
+            // Draw Prisms
+            prisms.forEach(p => {
+                ctx.save();
+                ctx.translate(p.x, p.y);
+                ctx.rotate(p.angle);
+                
+                // Prism body
+                ctx.fillStyle = 'rgba(201, 168, 76, 0.2)';
+                ctx.beginPath(); ctx.moveTo(-5, -p.size); ctx.lineTo(15, -p.size); ctx.lineTo(15, p.size); ctx.lineTo(-5, p.size); ctx.closePath(); ctx.fill();
+                
+                // Mirror surface
+                ctx.strokeStyle = interaction.target === p ? '#fff' : '#c9a84c';
+                ctx.lineWidth = 5;
+                ctx.beginPath(); ctx.moveTo(-5, -p.size); ctx.lineTo(-5, p.size); ctx.stroke();
+
+                // Rotation handle
+                ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+                ctx.lineWidth = 1;
+                ctx.beginPath(); ctx.arc(0, 0, p.size + 15, 0, Math.PI*2); ctx.stroke();
+                
+                ctx.restore();
+            });
+
+            // Draw Ray
+            const { path, hitTarget } = castRay();
+            ctx.strokeStyle = hitTarget ? '#00ffff' : 'rgba(255, 255, 255, 0.6)';
+            ctx.lineWidth = 3;
+            ctx.shadowBlur = hitTarget ? 15 : 0;
+            ctx.shadowColor = '#00ffff';
+            ctx.beginPath();
+            ctx.moveTo(path[0].x, path[0].y);
+            path.forEach(pt => ctx.lineTo(pt.x, pt.y));
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+
+            if (hitTarget && !solved) {
+                solved = true;
+                setTimeout(() => victoryOverlay.classList.add('active'), 800);
+            }
+
+            requestAnimationFrame(draw);
+        }
+
+        // Handle Input
+        canvas.addEventListener('mousedown', e => {
+            const rect = canvas.getBoundingClientRect();
+            const mx = e.clientX - rect.left;
+            const my = e.clientY - rect.top;
+
+            prisms.forEach(p => {
+                const mode = isPointInPrism(mx, my, p);
+                if (mode) {
+                    interaction.link = p;
+                    interaction.mode = mode;
+                    interaction.target = p;
+                }
+            });
+        });
+
+        window.addEventListener('mousemove', e => {
+            if (!interaction.target || solved) return;
+            const rect = canvas.getBoundingClientRect();
+            const mx = (e.clientX || e.touches?.[0].clientX) - rect.left;
+            const my = (e.clientY || e.touches?.[0].clientY) - rect.top;
+
+            if (interaction.mode === 'move') {
+                interaction.target.x = mx;
+                interaction.target.y = my;
+            } else if (interaction.mode === 'rotate') {
+                interaction.target.angle = Math.atan2(my - interaction.target.y, mx - interaction.target.x);
+            }
+        });
+
+        window.addEventListener('mouseup', () => {
+            interaction.target = null;
+            interaction.mode = null;
+        });
+
+        // Touch
+        canvas.addEventListener('touchstart', e => {
+            const rect = canvas.getBoundingClientRect();
+            const mx = e.touches[0].clientX - rect.left;
+            const my = e.touches[0].clientY - rect.top;
+            prisms.forEach(p => {
+                const mode = isPointInPrism(mx, my, p);
+                if (mode) { interaction.link = p; interaction.mode = mode; interaction.target = p; }
+            });
+        });
+
+        resize();
+        initStars(); // Not strictly needed but kept from previous ref
+        draw();
+
+        function initStars() {} // Stub
+    </script>
+</body>
+</html>
