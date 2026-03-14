@@ -54,36 +54,36 @@ const MapPage = () => {
   const [flagInput, setFlagInput] = useState("");
   const [unlockedActionCards, setUnlockedActionCards] = useState([]);
 
-    const CHALLENGES = {
-        d1: {
-            title: "Mysterious Island Portal",
-            url: "https://codequest-kriya-26-minigamectf.vercel.app/",
-            flag: "FLAG{Pl4tf0rm1ng_P1r4t3_K1ng}",
-            rewardId: 105,
-            rewardName: "Ghost Ship"
-        },
-        d2: {
-            title: "Ancient Navigator's Vault",
-            url: "/puzzles/pirate_puzzle.html",
-            flag: "FLAG{R1ng_Puzzl3_Mast3r_2026}",
-            rewardId: 106,
-            rewardName: "Kraken's Call"
-        },
-        d3: {
-            title: "Blackbeard's Hidden Dispatch",
-            url: "/puzzles/blackbeards_cipher.html",
-            flag: "FLAG{C1ph3r_M4st3r_B1ackb3ard}",
-            rewardId: 107,
-            rewardName: "Blackbeard's Favor"
-        },
-        d4: {
-            title: "The Navigator's Sunstone",
-            url: "/puzzles/sunstone_puzzle.html",
-            flag: "FLAG{B3am_B3nd3r_L3g3nd}",
-            rewardId: 108,
-            rewardName: "Navigator's Star"
-        }
-    };
+  const CHALLENGES = {
+    d1: {
+      title: "Mysterious Island Portal",
+      url: "https://codequest-kriya-26-minigamectf.vercel.app/",
+      flag: "FLAG{Pl4tf0rm1ng_P1r4t3_K1ng}",
+      rewardId: 105,
+      rewardName: "Ghost Ship"
+    },
+    d2: {
+      title: "Ancient Navigator's Vault",
+      url: "/puzzles/pirate_puzzle.html",
+      flag: "FLAG{R1ng_Puzzl3_Mast3r_2026}",
+      rewardId: 106,
+      rewardName: "Kraken's Call"
+    },
+    d3: {
+      title: "Blackbeard's Hidden Dispatch",
+      url: "/puzzles/blackbeards_cipher.html",
+      flag: "FLAG{C1ph3r_M4st3r_B1ackb3ard}",
+      rewardId: 107,
+      rewardName: "Blackbeard's Favor"
+    },
+    d4: {
+      title: "The Navigator's Sunstone",
+      url: "/puzzles/sunstone_puzzle.html",
+      flag: "FLAG{B3am_B3nd3r_L3g3nd}",
+      rewardId: 108,
+      rewardName: "Navigator's Star"
+    }
+  };
 
   const [activeChallenge, setActiveChallenge] = useState(null);
   const [r2Questions, setR2Questions] = useState(() => {
@@ -343,7 +343,7 @@ const MapPage = () => {
       if (islandQuestions.length === 0 && pickedCards && pickedCards.length > 0) {
         console.log("Fallback: Mapping questions by selected algorithm scrolls...");
         const cardIds = pickedCards.map(c => String(c.realId || c.id || c._id)).filter(Boolean);
-        
+
         islandQuestions = cardIds.map(sid => {
           return allQuestions.find(q =>
             q.allowedAlgorithms && q.allowedAlgorithms.some(aid => String(aid) === sid)
