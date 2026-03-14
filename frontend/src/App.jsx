@@ -16,13 +16,13 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Navigate to="/codequest" replace />} />
-        
+
         <Route path="/codequest">
           {/* Public Routes */}
           <Route index element={<Signup />} />
           <Route path="login" element={<Login />} />
           <Route path="otp" element={<OtpPage />} />
-          
+
           {/* Protected Routes */}
           <Route path="shiplanding" element={<ProtectedRoute><ShipLanding /></ProtectedRoute>} />
           <Route path="anchorage" element={<ProtectedRoute><Anchorage /></ProtectedRoute>} />
@@ -30,7 +30,7 @@ export default function App() {
           <Route path="map" element={<ProtectedRoute><MapPage /></ProtectedRoute>} />
           <Route path="admin" element={<ProtectedRoute><AdminPage /></ProtectedRoute>} />
           <Route path="arena" element={<ProtectedRoute><PirateArena /></ProtectedRoute>} />
-          
+
           {/* 404 - Inside /codequest */}
           <Route path="*" element={<NotFound />} />
         </Route>
